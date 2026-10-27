@@ -38,30 +38,32 @@ jobs:
           python3 -c '
           import os
 
-          # 1. Patch websocket_client.cc
+          # 1. Bổ sung stdlib.h và esp_event.h vào websocket_client.cc
           p = "main/net/websocket_client.cc"
           if os.path.exists(p):
               with open(p, "r") as f: s = f.read()
               if "<stdlib.h>" not in s: s = "#include <stdlib.h>\n#include <stdio.h>\n" + s
+              if "esp_event.h" not in s: s = "#include \"esp_event.h\"\n" + s
               s = s.replace("const std::string& server_url", "const char* server_url")
               s = s.replace("ws_cfg.uri = server_url.c_str();", "ws_cfg.uri = server_url;")
               with open(p, "w") as f: f.write(s)
 
-          # 2. Patch websocket_client.h
+          # 2. Sửa websocket_client.h
           p = "main/net/websocket_client.h"
           if os.path.exists(p):
               with open(p, "r") as f: s = f.read()
               s = s.replace("const std::string& server_url", "const char* server_url")
+              s = s.replace("#include <string>", "")
               with open(p, "w") as f: f.write(s)
 
-          # 3. Patch main.cc
+          # 3. Sửa lời gọi hàm trong main.cc
           p = "main/main.cc"
           if os.path.exists(p):
               with open(p, "r") as f: s = f.read()
               s = s.replace("WebSocketClient_Init(WifiManager_GetServerUrl());", "WebSocketClient_Init(WifiManager_GetServerUrl().c_str());")
               with open(p, "w") as f: f.write(s)
 
-          # 4. Clean CMakeLists.txt
+          # 4. Làm sạch CMakeLists.txt
           p = "main/CMakeLists.txt"
           if os.path.exists(p):
               with open(p, "r") as f: s = f.read()
@@ -78,10 +80,8 @@ jobs:
           . $IDF_PATH/export.sh
           idf.py set-target esp32s3
           if ! idf.py build; then
-            echo "=== XUẤT NHẬT KÝ LỖI BIÊN DỊCH (STDOUT) ==="
-            tail -n 60 build/log/idf_py_stdout_output_* 2>/dev/null || true
-            echo "=== XUẤT NHẬT KÝ LỖI BIÊN DỊCH (STDERR) ==="
-            cat build/log/idf_py_stderr_output_* 2>/dev/null || true
+            echo "=== TÁI HIỆN VÀ XUẤT LỖI CỤ THỂ ==="
+            ninja -C build -v || true
             exit 1
           fi
 
