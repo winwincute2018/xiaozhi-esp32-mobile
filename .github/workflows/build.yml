@@ -54,6 +54,9 @@ jobs:
               if "esp_event.h" not in s: s = "#include \"esp_event.h\"\n" + s
               s = s.replace("const std::string& server_url", "const char* server_url")
               s = s.replace("ws_cfg.uri = server_url.c_str();", "ws_cfg.uri = server_url;")
+              s = s.replace("(esp_websocket_event_id_t)", "")
+              s = s.replace("WEBSOCKET_EVENT_ANY", "(esp_websocket_event_id_t)WEBSOCKET_EVENT_ANY")
+              s = s.replace("(char*)pcm_buf", "(const char*)pcm_buf")
               with open(p, "w") as f: f.write(s)
 
           # 3. Patch websocket_client.h
@@ -92,7 +95,7 @@ jobs:
               s = s.replace("WifiManager_GetServerUrl().c_str()", "WifiManager_GetServerUrl()")
               with open(p, "w") as f: f.write(s)
 
-          # 7. Clean CMakeLists.txt and add -Wno-error
+          # 7. Clean CMakeLists.txt and add -Wno-error + -fpermissive
           p = "main/CMakeLists.txt"
           if os.path.exists(p):
               with open(p, "r") as f: s = f.read()
@@ -101,7 +104,7 @@ jobs:
               if "WHOLE_ARCHIVE" not in s:
                   s = s.replace("nvs_flash", "nvs_flash\n    WHOLE_ARCHIVE")
               if "-Wno-error" not in s:
-                  s += "\ntarget_compile_options(${COMPONENT_LIB} PRIVATE -Wno-error -Wno-missing-field-initializers -Wno-unused-variable)\n"
+                  s += "\ntarget_compile_options(${COMPONENT_LIB} PRIVATE -Wno-error -Wno-missing-field-initializers -Wno-unused-variable -fpermissive)\n"
               with open(p, "w") as f: f.write(s)
           '
 
@@ -110,7 +113,14 @@ jobs:
         run: |
           . $IDF_PATH/export.sh
           idf.py set-target esp32s3
-          idf.py build
+          if ! idf.py build; then
+            echo "=========================================================="
+            echo "=== CHI TIẾT LỖI BIÊN DỊCH TỪ IDF_PY_STDERR_OUTPUT ==="
+            echo "=========================================================="
+            cat build/log/idf_py_stderr_output_* 2>/dev/null || true
+            echo "=========================================================="
+            exit 1
+          fi
 
           cd build
           if [ -f "flash_project_args" ]; then
