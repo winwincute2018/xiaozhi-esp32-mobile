@@ -115,10 +115,17 @@ jobs:
           idf.py set-target esp32s3
           if ! idf.py build; then
             echo "=========================================================="
-            echo "=== CHI TIẾT LỖI BIÊN DỊCH TỪ IDF_PY_STDERR_OUTPUT ==="
+            echo "=== CHI TIẾT LỖI TỪ STDOUT ==="
+            echo "=========================================================="
+            cat build/log/idf_py_stdout_output_* 2>/dev/null || true
+            echo "=========================================================="
+            echo "=== CHI TIẾT LỖI TỪ STDERR ==="
             echo "=========================================================="
             cat build/log/idf_py_stderr_output_* 2>/dev/null || true
             echo "=========================================================="
+            echo "=== CHẠY NINJA TRỰC TIẾP ĐỂ THẤY LỖI ==="
+            echo "=========================================================="
+            ninja -C build || true
             exit 1
           fi
 
