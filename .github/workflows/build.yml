@@ -59,22 +59,29 @@ jobs:
               with open("main/main.cc", "w") as f:
                   f.write(m)
 
-          # 4. Sửa tên component cjson -> json trong ESP-IDF v5
+          # 4. Ghi đè cấu hình idf_component.yml chuẩn
+          os.makedirs("main", exist_ok=True)
+          with open("main/idf_component.yml", "w") as f:
+              f.write("""dependencies:
+  lvgl/lvgl: "^8.3.11"
+  espressif/esp_lcd_ili9341: "^1.1.0"
+  espressif/esp_websocket_client: "^1.3.0"
+  espressif/cjson: "^1.7.18"
+""")
+
+          # 5. Làm sạch CMakeLists.txt REQUIRES để component manager tự quản lý
           if os.path.exists("main/CMakeLists.txt"):
               with open("main/CMakeLists.txt", "r") as f:
                   cm = f.read()
-              cm = cm.replace("cjson", "json")
+              cm = cm.replace("esp_lcd_ili9341", "")
+              cm = cm.replace("lvgl", "")
+              cm = cm.replace("esp_websocket_client", "")
+              cm = cm.replace("cjson", "")
+              cm = cm.replace("json", "")
+              if "WHOLE_ARCHIVE" not in cm:
+                  cm = cm.replace("nvs_flash", "nvs_flash\n    WHOLE_ARCHIVE")
               with open("main/CMakeLists.txt", "w") as f:
                   f.write(cm)
-
-          # 5. Bổ sung esp_websocket_client vào idf_component.yml
-          if os.path.exists("main/idf_component.yml"):
-              with open("main/idf_component.yml", "r") as f:
-                  ic = f.read()
-              if "esp_websocket_client" not in ic:
-                  ic += "\n  espressif/esp_websocket_client: \"^1.3.0\"\n"
-              with open("main/idf_component.yml", "w") as f:
-                  f.write(ic)
           '
 
       - name: Build and Merge Firmware
@@ -83,7 +90,9 @@ jobs:
           . $IDF_PATH/export.sh
           idf.py set-target esp32s3
           if ! idf.py build; then
-            echo "=== XUẤT NHẬT KÝ LỖI BIÊN DỊCH ==="
+            echo "=== XUẤT NHẬT KÝ LỖI BIÊN DỊCH (STDOUT) ==="
+            tail -n 60 build/log/idf_py_stdout_output_* 2>/dev/null || true
+            echo "=== XUẤT NHẬT KÝ LỖI BIÊN DỊCH (STDERR) ==="
             cat build/log/idf_py_stderr_output_* 2>/dev/null || true
             exit 1
           fi
