@@ -27,7 +27,9 @@ jobs:
           elif [ -f "src_bundle_clean.zip" ]; then
             python3 -m zipfile -e src_bundle_clean.zip .
           fi
-          # Tự động bổ sung thư viện WebSocket Client từ Espressif Registry
+          # Sửa tên component cjson thành json theo chuẩn ESP-IDF v5
+          sed -i 's/cjson/json/' main/CMakeLists.txt
+          # Bổ sung WebSocket Client dependency
           grep -q "esp_websocket_client" main/idf_component.yml || echo '  espressif/esp_websocket_client: "^1.3.0"' >> main/idf_component.yml
 
       - name: Build and Merge Firmware
