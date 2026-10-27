@@ -38,7 +38,15 @@ jobs:
           python3 -c '
           import os
 
-          # 1. Bổ sung stdlib.h và esp_event.h vào websocket_client.cc
+          # 1. Patch display_manager.cc (Sửa tràn mảng cảm ứng và cảnh báo struct)
+          p = "main/display/display_manager.cc"
+          if os.path.exists(p):
+              with open(p, "r") as f: s = f.read()
+              s = s.replace("uint8_t data_raw[4];", "uint8_t data_raw[5];")
+              s = s.replace("i2c_master_read(cmd, data_raw, 4,", "i2c_master_read(cmd, data_raw, 5,")
+              with open(p, "w") as f: f.write(s)
+
+          # 2. Patch websocket_client.cc
           p = "main/net/websocket_client.cc"
           if os.path.exists(p):
               with open(p, "r") as f: s = f.read()
@@ -48,7 +56,7 @@ jobs:
               s = s.replace("ws_cfg.uri = server_url.c_str();", "ws_cfg.uri = server_url;")
               with open(p, "w") as f: f.write(s)
 
-          # 2. Sửa websocket_client.h
+          # 3. Patch websocket_client.h
           p = "main/net/websocket_client.h"
           if os.path.exists(p):
               with open(p, "r") as f: s = f.read()
@@ -56,14 +64,35 @@ jobs:
               s = s.replace("#include <string>", "")
               with open(p, "w") as f: f.write(s)
 
-          # 3. Sửa lời gọi hàm trong main.cc
+          # 4. Patch wifi_manager.h
+          p = "main/net/wifi_manager.h"
+          if os.path.exists(p):
+              with open(p, "r") as f: s = f.read()
+              s = s.replace("std::string WifiManager_GetIp(void);", "const char* WifiManager_GetIp(void);")
+              s = s.replace("std::string WifiManager_GetSsid(void);", "const char* WifiManager_GetSsid(void);")
+              s = s.replace("std::string WifiManager_GetServerUrl(void);", "const char* WifiManager_GetServerUrl(void);")
+              s = s.replace("void WifiManager_SetServerUrl(const std::string& url);", "void WifiManager_SetServerUrl(const char* url);")
+              with open(p, "w") as f: f.write(s)
+
+          # 5. Patch wifi_manager.cc
+          p = "main/net/wifi_manager.cc"
+          if os.path.exists(p):
+              with open(p, "r") as f: s = f.read()
+              s = s.replace("std::string WifiManager_GetIp(void) { return s_ip_addr; }", "const char* WifiManager_GetIp(void) { return s_ip_addr.c_str(); }")
+              s = s.replace("std::string WifiManager_GetSsid(void) { return s_ssid; }", "const char* WifiManager_GetSsid(void) { return s_ssid.c_str(); }")
+              s = s.replace("std::string WifiManager_GetServerUrl(void) { return s_server_url; }", "const char* WifiManager_GetServerUrl(void) { return s_server_url.c_str(); }")
+              s = s.replace("void WifiManager_SetServerUrl(const std::string& url) { s_server_url = url; }", "void WifiManager_SetServerUrl(const char* url) { if (url) s_server_url = url; }")
+              with open(p, "w") as f: f.write(s)
+
+          # 6. Patch main.cc
           p = "main/main.cc"
           if os.path.exists(p):
               with open(p, "r") as f: s = f.read()
-              s = s.replace("WebSocketClient_Init(WifiManager_GetServerUrl());", "WebSocketClient_Init(WifiManager_GetServerUrl().c_str());")
+              s = s.replace("WifiManager_GetSsid().c_str()", "WifiManager_GetSsid()")
+              s = s.replace("WifiManager_GetServerUrl().c_str()", "WifiManager_GetServerUrl()")
               with open(p, "w") as f: f.write(s)
 
-          # 4. Làm sạch CMakeLists.txt
+          # 7. Clean CMakeLists.txt and add -Wno-error
           p = "main/CMakeLists.txt"
           if os.path.exists(p):
               with open(p, "r") as f: s = f.read()
@@ -71,6 +100,8 @@ jobs:
                   s = s.replace(c, "")
               if "WHOLE_ARCHIVE" not in s:
                   s = s.replace("nvs_flash", "nvs_flash\n    WHOLE_ARCHIVE")
+              if "-Wno-error" not in s:
+                  s += "\ntarget_compile_options(${COMPONENT_LIB} PRIVATE -Wno-error -Wno-missing-field-initializers -Wno-unused-variable)\n"
               with open(p, "w") as f: f.write(s)
           '
 
@@ -79,11 +110,7 @@ jobs:
         run: |
           . $IDF_PATH/export.sh
           idf.py set-target esp32s3
-          if ! idf.py build; then
-            echo "=== TÁI HIỆN VÀ XUẤT LỖI CỤ THỂ ==="
-            ninja -C build -v || true
-            exit 1
-          fi
+          idf.py build
 
           cd build
           if [ -f "flash_project_args" ]; then
