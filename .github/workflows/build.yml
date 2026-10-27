@@ -23,6 +23,24 @@ jobs:
         shell: bash
         run: |
           . $IDF_PATH/export.sh
+          
+          # Tự động cấu hình Linker giữ lại toàn vẹn app_main trong C++
+          python3 -c '
+          with open("main/CMakeLists.txt", "r") as f:
+              c = f.read()
+          if "WHOLE_ARCHIVE" not in c:
+              c = c.replace("cjson", "cjson\n    WHOLE_ARCHIVE")
+              with open("main/CMakeLists.txt", "w") as f:
+                  f.write(c)
+
+          with open("main/main.cc", "r") as f:
+              m = f.read()
+          if "extern \"C\" {" not in m:
+              m = m.replace("extern \"C\" void app_main", "extern \"C\" { void app_main(void); }\nvoid app_main")
+              with open("main/main.cc", "w") as f:
+                  f.write(m)
+          '
+
           idf.py set-target esp32s3
           idf.py build
           cd build
