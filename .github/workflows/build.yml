@@ -9,21 +9,32 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    container: espressif/idf:v5.1.4
     steps:
+      - name: Fix Git Dubious Ownership
+        run: git config --global --add safe.directory '*'
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Build with ESP-IDF
-        uses: espressif/esp-idf-ci-action@v1
-        with:
-          esp_idf_version: v5.1.4
-          target: esp32s3
-          path: '.'
+      - name: Ensure Component Dependencies
+        run: |
+          mkdir -p main
+          cat << 'EOF' > main/idf_component.yml
+          dependencies:
+            lvgl/lvgl: "^8.3.11"
+            espressif/esp_lcd_ili9341: "^2.1.0"
+          EOF
+
+      - name: Set target ESP32-S3
+        run: idf.py set-target esp32s3
+
+      - name: Build Firmware
+        run: idf.py build
 
       - name: Generate Merged Binary (0x0 Full Image)
-        shell: bash
         run: |
           cd build
           esptool.py --chip esp32s3 merge_bin -o merged-firmware.bin @flash_args
@@ -34,7 +45,6 @@ jobs:
           name: xiaozhi-esp32-mobile-firmware
           path: |
             build/merged-firmware.bin
+            build/xiaozhi_esp32_mobile_clean.bin
             build/bootloader/bootloader.bin
             build/partition_table/partition-table.bin
-            build/xiaozhi_esp32_mobile_clean.bin
-            build/flasher_args.json
