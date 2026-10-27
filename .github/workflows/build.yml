@@ -38,15 +38,23 @@ jobs:
           python3 -c '
           import os
 
-          # 1. Patch display_manager.cc (Sửa tràn mảng cảm ứng và cảnh báo struct)
+          # 1. Patch display_manager.cc (Thêm hal/spi_ll.h lên đầu để tránh xung đột C++ operator, sửa mảng cảm ứng)
           p = "main/display/display_manager.cc"
           if os.path.exists(p):
               with open(p, "r") as f: s = f.read()
+              if "hal/spi_ll.h" not in s: s = "#include \"hal/spi_ll.h\"\n" + s
               s = s.replace("uint8_t data_raw[4];", "uint8_t data_raw[5];")
               s = s.replace("i2c_master_read(cmd, data_raw, 4,", "i2c_master_read(cmd, data_raw, 5,")
               with open(p, "w") as f: f.write(s)
 
-          # 2. Patch websocket_client.cc
+          # 2. Patch power_manager.cc (Sửa tên struct chuẩn adc_oneshot_unit_init_cfg_t của IDF v5)
+          p = "main/peripherals/power_manager.cc"
+          if os.path.exists(p):
+              with open(p, "r") as f: s = f.read()
+              s = s.replace("adc_oneshot_unit_init_config_t", "adc_oneshot_unit_init_cfg_t")
+              with open(p, "w") as f: f.write(s)
+
+          # 3. Patch websocket_client.cc
           p = "main/net/websocket_client.cc"
           if os.path.exists(p):
               with open(p, "r") as f: s = f.read()
@@ -59,7 +67,7 @@ jobs:
               s = s.replace("(char*)pcm_buf", "(const char*)pcm_buf")
               with open(p, "w") as f: f.write(s)
 
-          # 3. Patch websocket_client.h
+          # 4. Patch websocket_client.h
           p = "main/net/websocket_client.h"
           if os.path.exists(p):
               with open(p, "r") as f: s = f.read()
@@ -67,7 +75,7 @@ jobs:
               s = s.replace("#include <string>", "")
               with open(p, "w") as f: f.write(s)
 
-          # 4. Patch wifi_manager.h
+          # 5. Patch wifi_manager.h
           p = "main/net/wifi_manager.h"
           if os.path.exists(p):
               with open(p, "r") as f: s = f.read()
@@ -77,7 +85,7 @@ jobs:
               s = s.replace("void WifiManager_SetServerUrl(const std::string& url);", "void WifiManager_SetServerUrl(const char* url);")
               with open(p, "w") as f: f.write(s)
 
-          # 5. Patch wifi_manager.cc
+          # 6. Patch wifi_manager.cc
           p = "main/net/wifi_manager.cc"
           if os.path.exists(p):
               with open(p, "r") as f: s = f.read()
@@ -87,7 +95,7 @@ jobs:
               s = s.replace("void WifiManager_SetServerUrl(const std::string& url) { s_server_url = url; }", "void WifiManager_SetServerUrl(const char* url) { if (url) s_server_url = url; }")
               with open(p, "w") as f: f.write(s)
 
-          # 6. Patch main.cc
+          # 7. Patch main.cc
           p = "main/main.cc"
           if os.path.exists(p):
               with open(p, "r") as f: s = f.read()
@@ -95,7 +103,7 @@ jobs:
               s = s.replace("WifiManager_GetServerUrl().c_str()", "WifiManager_GetServerUrl()")
               with open(p, "w") as f: f.write(s)
 
-          # 7. Clean CMakeLists.txt and add -Wno-error + -fpermissive
+          # 8. Clean CMakeLists.txt and add -Wno-error + -fpermissive
           p = "main/CMakeLists.txt"
           if os.path.exists(p):
               with open(p, "r") as f: s = f.read()
