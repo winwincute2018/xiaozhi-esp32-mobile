@@ -19,25 +19,20 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Ensure Component Dependencies
+      - name: Build and Merge Firmware
+        shell: bash
         run: |
-          mkdir -p main
-          cat << 'EOF' > main/idf_component.yml
-          dependencies:
-            lvgl/lvgl: "^8.3.11"
-            espressif/esp_lcd_ili9341: "^2.1.0"
-          EOF
-
-      - name: Set target ESP32-S3
-        run: idf.py set-target esp32s3
-
-      - name: Build Firmware
-        run: idf.py build
-
-      - name: Generate Merged Binary (0x0 Full Image)
-        run: |
+          . $IDF_PATH/export.sh
+          idf.py set-target esp32s3
+          idf.py build
           cd build
-          esptool.py --chip esp32s3 merge_bin -o merged-firmware.bin @flash_args
+          if [ -f "flash_project_args" ]; then
+            esptool.py --chip esp32s3 merge_bin -o merged-firmware.bin @flash_project_args
+          elif [ -f "flash_args" ]; then
+            esptool.py --chip esp32s3 merge_bin -o merged-firmware.bin @flash_args
+          else
+            esptool.py --chip esp32s3 merge_bin -o merged-firmware.bin 0x0 bootloader/bootloader.bin 0x8000 partition_table/partition-table.bin 0x20000 xiaozhi_esp32_mobile_clean.bin
+          fi
 
       - name: Upload Firmware Binary Artifact
         uses: actions/upload-artifact@v4
