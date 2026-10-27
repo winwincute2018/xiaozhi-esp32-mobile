@@ -19,7 +19,7 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Unpack Source Code
+      - name: Unpack and Prepare Sources
         shell: bash
         run: |
           if [ -f "source_code.zip" ]; then
@@ -28,60 +28,48 @@ jobs:
             python3 -m zipfile -e src_bundle_clean.zip .
           fi
 
-          # Tự động đồng bộ các bản vá tương thích chuẩn C++ & ESP-IDF v5
+          mkdir -p main
+          echo 'dependencies:' > main/idf_component.yml
+          echo '  lvgl/lvgl: "^8.3.11"' >> main/idf_component.yml
+          echo '  espressif/esp_lcd_ili9341: "^1.1.0"' >> main/idf_component.yml
+          echo '  espressif/esp_websocket_client: "^1.3.0"' >> main/idf_component.yml
+          echo '  espressif/cjson: "^1.7.18"' >> main/idf_component.yml
+
           python3 -c '
           import os
 
-          # 1. Bổ sung stdlib.h và sửa tham số WebSocketClient_Init
-          if os.path.exists("main/net/websocket_client.cc"):
-              with open("main/net/websocket_client.cc", "r") as f:
-                  ws = f.read()
-              if "<stdlib.h>" not in ws:
-                  ws = "#include <stdlib.h>\n" + ws
-              ws = ws.replace("const std::string& server_url", "const char* server_url")
-              ws = ws.replace("ws_cfg.uri = server_url.c_str();", "ws_cfg.uri = server_url;")
-              with open("main/net/websocket_client.cc", "w") as f:
-                  f.write(ws)
+          # 1. Patch websocket_client.cc
+          p = "main/net/websocket_client.cc"
+          if os.path.exists(p):
+              with open(p, "r") as f: s = f.read()
+              if "<stdlib.h>" not in s: s = "#include <stdlib.h>\n#include <stdio.h>\n" + s
+              s = s.replace("const std::string& server_url", "const char* server_url")
+              s = s.replace("ws_cfg.uri = server_url.c_str();", "ws_cfg.uri = server_url;")
+              with open(p, "w") as f: f.write(s)
 
-          # 2. Sửa header websocket_client.h
-          if os.path.exists("main/net/websocket_client.h"):
-              with open("main/net/websocket_client.h", "r") as f:
-                  wsh = f.read()
-              wsh = wsh.replace("const std::string& server_url", "const char* server_url")
-              with open("main/net/websocket_client.h", "w") as f:
-                  f.write(wsh)
+          # 2. Patch websocket_client.h
+          p = "main/net/websocket_client.h"
+          if os.path.exists(p):
+              with open(p, "r") as f: s = f.read()
+              s = s.replace("const std::string& server_url", "const char* server_url")
+              with open(p, "w") as f: f.write(s)
 
-          # 3. Sửa lời gọi hàm trong main.cc
-          if os.path.exists("main/main.cc"):
-              with open("main/main.cc", "r") as f:
-                  m = f.read()
-              m = m.replace("WebSocketClient_Init(WifiManager_GetServerUrl());", "WebSocketClient_Init(WifiManager_GetServerUrl().c_str());")
-              with open("main/main.cc", "w") as f:
-                  f.write(m)
+          # 3. Patch main.cc
+          p = "main/main.cc"
+          if os.path.exists(p):
+              with open(p, "r") as f: s = f.read()
+              s = s.replace("WebSocketClient_Init(WifiManager_GetServerUrl());", "WebSocketClient_Init(WifiManager_GetServerUrl().c_str());")
+              with open(p, "w") as f: f.write(s)
 
-          # 4. Ghi đè cấu hình idf_component.yml chuẩn
-          os.makedirs("main", exist_ok=True)
-          with open("main/idf_component.yml", "w") as f:
-              f.write("""dependencies:
-  lvgl/lvgl: "^8.3.11"
-  espressif/esp_lcd_ili9341: "^1.1.0"
-  espressif/esp_websocket_client: "^1.3.0"
-  espressif/cjson: "^1.7.18"
-""")
-
-          # 5. Làm sạch CMakeLists.txt REQUIRES để component manager tự quản lý
-          if os.path.exists("main/CMakeLists.txt"):
-              with open("main/CMakeLists.txt", "r") as f:
-                  cm = f.read()
-              cm = cm.replace("esp_lcd_ili9341", "")
-              cm = cm.replace("lvgl", "")
-              cm = cm.replace("esp_websocket_client", "")
-              cm = cm.replace("cjson", "")
-              cm = cm.replace("json", "")
-              if "WHOLE_ARCHIVE" not in cm:
-                  cm = cm.replace("nvs_flash", "nvs_flash\n    WHOLE_ARCHIVE")
-              with open("main/CMakeLists.txt", "w") as f:
-                  f.write(cm)
+          # 4. Clean CMakeLists.txt
+          p = "main/CMakeLists.txt"
+          if os.path.exists(p):
+              with open(p, "r") as f: s = f.read()
+              for c in ["esp_lcd_ili9341", "lvgl", "esp_websocket_client", "cjson", "json"]:
+                  s = s.replace(c, "")
+              if "WHOLE_ARCHIVE" not in s:
+                  s = s.replace("nvs_flash", "nvs_flash\n    WHOLE_ARCHIVE")
+              with open(p, "w") as f: f.write(s)
           '
 
       - name: Build and Merge Firmware
