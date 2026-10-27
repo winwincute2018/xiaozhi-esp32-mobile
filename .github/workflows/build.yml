@@ -38,23 +38,30 @@ jobs:
           python3 -c '
           import os
 
-          # 1. Patch display_manager.cc (Thêm hal/spi_ll.h lên đầu để tránh xung đột C++ operator, sửa mảng cảm ứng)
-          p = "main/display/display_manager.cc"
-          if os.path.exists(p):
-              with open(p, "r") as f: s = f.read()
-              if "hal/spi_ll.h" not in s: s = "#include \"hal/spi_ll.h\"\n" + s
-              s = s.replace("uint8_t data_raw[4];", "uint8_t data_raw[5];")
-              s = s.replace("i2c_master_read(cmd, data_raw, 4,", "i2c_master_read(cmd, data_raw, 5,")
-              with open(p, "w") as f: f.write(s)
+          # 1. Chuyển display_manager và power_manager sang .c (biên dịch bằng GCC C thuần)
+          for src in ["main/display/display_manager", "main/peripherals/power_manager"]:
+              if os.path.exists(src + ".cc"):
+                  if os.path.exists(src + ".c"):
+                      os.remove(src + ".c")
+                  os.rename(src + ".cc", src + ".c")
 
-          # 2. Patch power_manager.cc (Sửa tên struct chuẩn adc_oneshot_unit_init_cfg_t của IDF v5)
-          p = "main/peripherals/power_manager.cc"
-          if os.path.exists(p):
-              with open(p, "r") as f: s = f.read()
-              s = s.replace("adc_oneshot_unit_init_config_t", "adc_oneshot_unit_init_cfg_t")
-              with open(p, "w") as f: f.write(s)
+          # 2. Patch power_manager (Tên struct chuẩn IDF v5: adc_oneshot_unit_init_cfg_t)
+          for p in ["main/peripherals/power_manager.c", "main/peripherals/power_manager.cc"]:
+              if os.path.exists(p):
+                  with open(p, "r") as f: s = f.read()
+                  s = s.replace("adc_oneshot_unit_init_config_t", "adc_oneshot_unit_init_cfg_t")
+                  with open(p, "w") as f: f.write(s)
 
-          # 3. Patch websocket_client.cc
+          # 3. Patch display_manager (Fix mảng cảm ứng và loại bỏ hal/spi_ll.h)
+          for p in ["main/display/display_manager.c", "main/display/display_manager.cc"]:
+              if os.path.exists(p):
+                  with open(p, "r") as f: s = f.read()
+                  s = s.replace("#include \"hal/spi_ll.h\"", "")
+                  s = s.replace("uint8_t data_raw[4];", "uint8_t data_raw[5];")
+                  s = s.replace("i2c_master_read(cmd, data_raw, 4,", "i2c_master_read(cmd, data_raw, 5,")
+                  with open(p, "w") as f: f.write(s)
+
+          # 4. Patch websocket_client.cc
           p = "main/net/websocket_client.cc"
           if os.path.exists(p):
               with open(p, "r") as f: s = f.read()
@@ -67,7 +74,7 @@ jobs:
               s = s.replace("(char*)pcm_buf", "(const char*)pcm_buf")
               with open(p, "w") as f: f.write(s)
 
-          # 4. Patch websocket_client.h
+          # 5. Patch websocket_client.h
           p = "main/net/websocket_client.h"
           if os.path.exists(p):
               with open(p, "r") as f: s = f.read()
@@ -75,7 +82,7 @@ jobs:
               s = s.replace("#include <string>", "")
               with open(p, "w") as f: f.write(s)
 
-          # 5. Patch wifi_manager.h
+          # 6. Patch wifi_manager.h
           p = "main/net/wifi_manager.h"
           if os.path.exists(p):
               with open(p, "r") as f: s = f.read()
@@ -85,7 +92,7 @@ jobs:
               s = s.replace("void WifiManager_SetServerUrl(const std::string& url);", "void WifiManager_SetServerUrl(const char* url);")
               with open(p, "w") as f: f.write(s)
 
-          # 6. Patch wifi_manager.cc
+          # 7. Patch wifi_manager.cc
           p = "main/net/wifi_manager.cc"
           if os.path.exists(p):
               with open(p, "r") as f: s = f.read()
@@ -95,7 +102,7 @@ jobs:
               s = s.replace("void WifiManager_SetServerUrl(const std::string& url) { s_server_url = url; }", "void WifiManager_SetServerUrl(const char* url) { if (url) s_server_url = url; }")
               with open(p, "w") as f: f.write(s)
 
-          # 7. Patch main.cc
+          # 8. Patch main.cc
           p = "main/main.cc"
           if os.path.exists(p):
               with open(p, "r") as f: s = f.read()
@@ -103,10 +110,12 @@ jobs:
               s = s.replace("WifiManager_GetServerUrl().c_str()", "WifiManager_GetServerUrl()")
               with open(p, "w") as f: f.write(s)
 
-          # 8. Clean CMakeLists.txt and add -Wno-error + -fpermissive
+          # 9. Sửa CMakeLists.txt đổi sang file .c và thêm cờ bỏ qua cảnh báo
           p = "main/CMakeLists.txt"
           if os.path.exists(p):
               with open(p, "r") as f: s = f.read()
+              s = s.replace("display/display_manager.cc", "display/display_manager.c")
+              s = s.replace("peripherals/power_manager.cc", "peripherals/power_manager.c")
               for c in ["esp_lcd_ili9341", "lvgl", "esp_websocket_client", "cjson", "json"]:
                   s = s.replace(c, "")
               if "WHOLE_ARCHIVE" not in s:
